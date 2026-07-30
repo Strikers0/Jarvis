@@ -1,0 +1,82 @@
+llm:
+  provider: openrouter  # openrouter, openai, gemini
+  model: openai/gpt-4o-mini
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 2.0
+
+openrouter:
+  base_url: https://openrouter.ai/api/v1
+
+openai:
+  base_url: https://api.openai.com/v1
+
+gemini:
+  base_url: https://generativelanguage.googleapis.com/v1beta
+
+sarvam:
+  # API key: use SARVAM_API_KEY env var only — never hardcode here
+  stt_model: "saaras:v3"                 # STT model: sarvam-1
+  tts_model: "bulbul:v3"                 # TTS model: sarvam-1
+  stt_language_code: unknown          # language code for STT
+  tts_language_code: "hi-IN"          # language code for TTS
+  tts_speaker: priya                # TTS speaker voice
+  tts_pitch: 0.0
+  tts_pace: 1.0
+  tts_loudness: 1.0
+  tts_sample_rate: 22050
+
+voice:
+  provider:   sarvam                 # overall voice provider (whisper, sarvam)
+  stt_provider: sarvam               # whisper or sarvam
+  tts_provider: sarvam                 # piper or sarvam
+
+personality:
+  active: jarvis
+
+conversation:
+  max_history: 50
+  max_context_tokens: 8192
+  autosave: true
+  autosave_interval: 60
+
+stt:
+  model_size: base        # tiny, base, small, medium, large-v3
+  device: auto            # auto, cpu, cuda
+  compute_type: auto      # auto, float16, int8_float16
+  language: ""            # auto-detect if empty
+  vad_threshold: 0.3
+  min_speech_duration: 0.3
+
+tts:
+  voice_dir: ""           # path to voice model files
+  default_voice: en_US-lessac-medium
+  sample_rate: 22050
+
+memory:
+  db_path: memory.db
+  vector_db_path: vector_memory
+  auto_extract: true
+  auto_extract_interval: 300  # seconds between extractions
+  max_facts_in_context: 20
+
+tool:
+  enabled: true
+  max_tool_rounds: 5
+  permissions:
+    execute_command:
+      level: confirm
+    close_app:
+      level: confirm
+    open_file:
+      level: auto
+    search_google:
+      level: auto
+    search_youtube:
+      level: auto
+
+logging:
+  level: info
+  format: console  # console or json

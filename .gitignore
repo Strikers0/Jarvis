@@ -1,0 +1,57 @@
+# --- Environment ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# --- Virtual Environment ---
+venv/
+.venv/
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Databases (user data) ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Audio / Voice Models ---
+*.onnx
+*.onnx.json
+*.wav
+*.mp3
+*.m4a
+*.flac
+output.*
+
+# --- Runtime / Generated ---
+runtime/
+vector_memory/
+session_*.json
+test_*.txt
+test_*.wav
+
+# --- Cache & Logs ---
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
