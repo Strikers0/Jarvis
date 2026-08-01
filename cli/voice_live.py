@@ -20,6 +20,7 @@ from core.tools import (
     ToolDispatcher,
     ToolRegistry,
 )
+from core.tools.personality import PersonalityToolSet
 from voice.controller import run_voice
 from voice.microphone import resolve_mic
 from voice.sarvam_stt import SarvamSTT
@@ -28,13 +29,14 @@ from voice.sarvam_tts import SarvamTTS
 console = Console()
 
 
-def build_tool_dispatcher(config, conversation, memory_manager):
+def build_tool_dispatcher(config, conversation, memory_manager, personality_manager):
     registry = ToolRegistry()
     for tool_set in (
         DesktopAutomationToolSet(),
         BrowserAutomationToolSet(),
         MediaToolSet(),
         SystemToolSet(),
+        PersonalityToolSet(personality_manager),
     ):
         registry.register_set(tool_set)
 
@@ -50,6 +52,7 @@ def build_tool_dispatcher(config, conversation, memory_manager):
         permission_manager=permission_manager,
         confirm_callback=lambda tool_name, args: True,
     )
+
     console.print(f"[dim]Loaded {len(registry)} tools[/dim]")
     return dispatcher
 
@@ -58,6 +61,13 @@ def build_system_prompt_builder(config, conversation, personality_manager):
     def builder() -> str:
         personality = personality_manager.get_active()
         base = personality.system_prompt if personality else "You are JARVIS, a helpful AI assistant."
+        base += (
+            "\n\nThis is a voice conversation. Reply in Hinglish (Hindi written in Latin/Roman "
+            "script mixed with English), since you are being read aloud by a Hindi voice. "
+            "Keep replies short, conversational, and easy to speak naturally. "
+            "Write numbers and simple words in English, use Hindi for the rest (e.g. "
+            "'tumhara message send ho gaya')."
+        )
         if config.tool.enabled:
             base += (
                 "\n\nYou have access to tools that can perform actions on the user's system "
@@ -80,6 +90,7 @@ def build_sarvam(config) -> tuple[SarvamSTT, SarvamTTS]:
         api_key=api_key,
         model=sarvam_cfg.stt_model,
         language_code=sarvam_cfg.stt_language_code,
+        with_translation=sarvam_cfg.stt_with_translation,
     )
     tts = SarvamTTS(
         api_key=api_key,
@@ -115,9 +126,8 @@ async def voice_live(config_path: str | Path | None = None) -> None:
     dispatcher = None
     system_prompt_builder = None
     if config.tool.enabled:
-        dispatcher = build_tool_dispatcher(config, conversation, memory_manager)
+        dispatcher = build_tool_dispatcher(config, conversation, memory_manager, personality_manager)
         system_prompt_builder = build_system_prompt_builder(config, conversation, personality_manager)
-
     stt, tts = build_sarvam(config)
 
     mic_device = resolve_mic()
@@ -143,6 +153,11 @@ async def voice_live(config_path: str | Path | None = None) -> None:
         )
     finally:
         memory_manager.close()
+        if llm:
+            try:
+                await llm.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

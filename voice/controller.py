@@ -30,6 +30,8 @@ class VoiceController:
         dispatcher: Optional[Any] = None,
         system_prompt_builder: Any = None,
         mic_device: Optional[int] = None,
+        silence_duration: float = 0.5,
+        listen_timeout: float = 15.0,
         logger: Optional[VoiceLogger] = None,
     ):
         self.llm = llm
@@ -40,6 +42,8 @@ class VoiceController:
         self.dispatcher = dispatcher
         self.system_prompt_builder = system_prompt_builder
         self.mic_device = mic_device
+        self.silence_duration = silence_duration
+        self.listen_timeout = listen_timeout
         self.logger = logger or VoiceLogger()
         self._running = False
         self.response_path = Path("runtime/response.wav")
@@ -66,7 +70,11 @@ class VoiceController:
 
     async def _turn(self) -> None:
         console.print("[dim]Listening...[/dim]")
-        samples = await record_until_silence(device=self.mic_device)
+        samples = await record_until_silence(
+            device=self.mic_device,
+            silence_duration=self.silence_duration,
+            listen_timeout=self.listen_timeout,
+        )
         if samples is None or len(samples) == 0:
             console.print("[dim]No speech detected.[/dim]")
             return
@@ -117,7 +125,7 @@ class VoiceController:
         try:
             out = await self.tts.synthesize(reply, output_path=self.response_path)
             self.logger.tts_response(str(out))
-            player.play_wav_start(out)
+            player.play_wav_start(out, mic_device=self.mic_device)
             while player.is_playing():
                 await asyncio.sleep(0.1)
         except Exception as e:
@@ -167,6 +175,8 @@ async def run_voice(
         dispatcher=dispatcher,
         system_prompt_builder=system_prompt_builder,
         mic_device=mic_device,
+        silence_duration=getattr(config.voice, "silence_duration", 0.5),
+        listen_timeout=getattr(config.voice, "listen_timeout", 15.0),
     )
     try:
         await controller.run()

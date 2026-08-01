@@ -53,6 +53,7 @@ class AudioFileProcessor:
             api_key=api_key,
             model=sarvam_cfg.stt_model,
             language_code=sarvam_cfg.stt_language_code,
+            with_translation=sarvam_cfg.stt_with_translation,
         )
         self.sarvam_tts = SarvamTTS(
             api_key=api_key,

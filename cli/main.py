@@ -12,18 +12,21 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
-
 from core.config import ConfigManager
 from core.conversation import MemoryAwareConversationManager
 from core.llm import LLMFactory, LLMMessage
 from core.memory import MemoryManager
 from core.personality import PersonalityManager
+from core.services import ServiceManager
 from core.tools import (
-    ToolRegistry, ToolDispatcher, PermissionManager,
-    DesktopAutomationToolSet, BrowserAutomationToolSet,
-    MediaToolSet, SystemToolSet,
+    BrowserAutomationToolSet,
+    DesktopAutomationToolSet,
+    MediaToolSet,
+    PermissionManager,
+    SystemToolSet,
+    ToolDispatcher,
+    ToolRegistry,
 )
-
 
 console = Console()
 
@@ -50,6 +53,10 @@ def print_welcome() -> None:
         "  [bold]/memory[/bold]               - Show stored memories\n"
         "  [bold]/tools[/bold]                 - List available tools\n"
         "  [bold]/audit[/bold]                - Show tool execution audit log\n"
+        "  [bold]/services[/bold]             - Show service health status\n"
+        "  [bold]/notes[/bold]                - List notes\n"
+        "  [bold]/todos[/bold]                - List to-do items\n"
+        "  [bold]/remind[/bold]               - List upcoming reminders\n"
         "  [bold]/help[/bold]                 - Show this help\n"
         "  [bold]/exit[/bold]                 - Exit JARVIS",
         title="Help",
@@ -77,6 +84,7 @@ class JARVISCLI:
         self.tool_registry = ToolRegistry()
         self.permission_manager = PermissionManager()
         self.tool_dispatcher: Optional[ToolDispatcher] = None
+        self.service_manager: Optional[ServiceManager] = None
         self._init_personality()
         self._init_llm()
         self._init_tools()
@@ -111,6 +119,10 @@ class JARVISCLI:
         for ts in tool_sets:
             self.tool_registry.register_set(ts)
 
+        if self.config.services.enabled:
+            self.service_manager = ServiceManager(self.config)
+            self.tool_registry.register_set(self.service_manager)
+
         perms = {}
         for tool_name, perm_cfg in self.config.tool.permissions.items():
             perms[tool_name] = perm_cfg.level
@@ -142,7 +154,7 @@ class JARVISCLI:
         return result.lower() == "y"
 
     def _init_session(self) -> None:
-        session_name = f"JARVIS Session"
+        session_name = "JARVIS Session"
         self.conversation.create_session(session_name)
 
     def _get_active_personality(self) -> str:
@@ -182,6 +194,7 @@ class JARVISCLI:
                 continue
 
             await self._handle_message(user_input)
+            self._check_due_reminders()
 
         await self.cleanup()
 
@@ -232,13 +245,24 @@ class JARVISCLI:
         elif cmd == "/audit":
             self._show_audit_log()
 
+        elif cmd == "/services":
+            await self._show_services()
+
+        elif cmd == "/notes":
+            self._show_notes()
+
+        elif cmd == "/todos":
+            self._show_todos()
+
+        elif cmd == "/remind":
+            self._show_reminders()
+
         else:
             console.print(f"[red]Unknown command:[/red] {cmd}")
             console.print("Type [bold]/help[/bold] for available commands.")
 
     async def _switch_personality(self, name: str) -> None:
         if not name:
-            available = self.personality_manager.list_names()
             table = Table(title="Available Personalities")
             table.add_column("Name", style="cyan")
             table.add_column("Gender", style="dim")
@@ -261,7 +285,7 @@ class JARVISCLI:
                 console.print(table)
                 return
             console.print(f"[red]Personality '{name}' not found.[/red]")
-            console.print(f"Type [bold]/personality[/bold] to see all available personalities.")
+            console.print("Type [bold]/personality[/bold] to see all available personalities.")
             return
 
         preview = Panel(
@@ -353,7 +377,7 @@ class JARVISCLI:
         if self.conversation.load_session(full_id):
             console.print(f"[green]Loaded session:[/green] {full_id[:8]}")
         else:
-            console.print(f"[red]Failed to load session.[/red]")
+            console.print("[red]Failed to load session.[/red]")
 
     def _find_session_id(self, partial: str) -> Optional[str]:
         for s in self.conversation.list_sessions():
@@ -399,6 +423,63 @@ class JARVISCLI:
                 output,
             )
         console.print(table)
+
+    async def _show_services(self) -> None:
+        if not self.service_manager:
+            console.print("[dim]Services are disabled in config.[/dim]")
+            return
+        report = await self.service_manager.health_report()
+        table = Table(title="Service Health")
+        table.add_column("Service", style="cyan")
+        table.add_column("Status")
+        table.add_column("Detail")
+        for name, health in report.items():
+            status = "[green]OK[/green]" if health.get("ok") else "[red]ERROR[/red]"
+            table.add_row(name, status, str(health.get("detail", ""))[:80])
+        console.print(table)
+
+    def _get_service(self, name: str):
+        return self.service_manager.get(name) if self.service_manager else None
+
+    def _show_notes(self) -> None:
+        service = self._get_service("notes")
+        if not service:
+            console.print("[dim]Notes service unavailable.[/dim]")
+            return
+        notes = service.list_notes()
+        console.print(Panel(service.format_notes(notes), title="Notes", border_style="cyan"))
+
+    def _show_todos(self) -> None:
+        service = self._get_service("notes")
+        if not service:
+            console.print("[dim]Notes service unavailable.[/dim]")
+            return
+        todos = service.list_todos()
+        console.print(Panel(service.format_todos(todos), title="To-Do", border_style="cyan"))
+
+    def _show_reminders(self) -> None:
+        service = self._get_service("calendar")
+        if not service:
+            console.print("[dim]Calendar service unavailable.[/dim]")
+            return
+        reminders = service.list_reminders()
+        console.print(Panel(service.format_reminders(reminders), title="Upcoming Reminders", border_style="cyan"))
+
+    def _check_due_reminders(self) -> None:
+        service = self._get_service("calendar")
+        if not service or not service.reminders_enabled:
+            return
+        try:
+            due = service.check_due_reminders()
+        except Exception:
+            return
+        for r in due:
+            panel = Panel(
+                f"[bold]⏰ {r['title']}[/bold]",
+                title="Reminder",
+                border_style="yellow",
+            )
+            console.print(panel)
 
     async def _handle_message(self, user_input: str) -> None:
         if not self.llm:
@@ -448,6 +529,11 @@ class JARVISCLI:
                 pass
         self.conversation.close()
         self.memory_manager.close()
+        if self.service_manager:
+            try:
+                await self.service_manager.close()
+            except Exception:
+                pass
         try:
             from core.tools.browser import PlaywrightManager
             pw = await PlaywrightManager.get_instance()

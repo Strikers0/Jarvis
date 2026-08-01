@@ -48,21 +48,74 @@ def _name_match_candidates(device: Optional[int]) -> list[int]:
     return result
 
 
-def _measure(idx: int, duration: float = 0.5) -> float:
-    try:
-        levels: list[float] = []
-        with sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="float32",
-            blocksize=int(SAMPLE_RATE * 0.1),
-            device=idx,
-            callback=lambda d, f, t, s: levels.append(float(np.sqrt(np.mean(d[:, 0] ** 2)))),
-        ):
-            time.sleep(duration)
-        return max(levels) if levels else 0.0
-    except Exception:
-        return 0.0
+def _measure(idx: int, duration: float = 0.2) -> float:
+    result: dict[str, float] = {"rms": 0.0}
+
+    def _probe() -> None:
+        try:
+            levels: list[float] = []
+            with sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype="float32",
+                blocksize=int(SAMPLE_RATE * 0.1),
+                device=idx,
+                callback=lambda d, f, t, s: levels.append(float(np.sqrt(np.mean(d[:, 0] ** 2)))),
+            ):
+                time.sleep(duration)
+            result["rms"] = max(levels) if levels else 0.0
+        except Exception:
+            result["rms"] = 0.0
+
+    probe_thread = threading.Thread(target=_probe, daemon=True)
+    probe_thread.start()
+    probe_thread.join(timeout=duration + 3.0)
+    return result["rms"]
+
+
+_BAD_MIC_HINTS = (
+    "midi",
+    "line (",
+    "line(",
+    "sound mapper",
+    "primary sound capture",
+    "virtual audio",
+    "loopback",
+)
+
+
+def _mic_quality_penalty(name: str) -> int:
+    lower = name.lower()
+    penalty = 0
+    for hint in _BAD_MIC_HINTS:
+        if hint in lower:
+            penalty += 2
+    if "droidcam" in lower:
+        penalty += 1
+    return penalty
+
+
+_HEADSET_HINTS = (
+    "headset",
+    "headphone",
+    "handsfree",
+    "hands-free",
+    "hands free",
+    "bluetooth",
+    "airdopes",
+    "airpods",
+    "buds",
+    "earbud",
+    "earbuds",
+)
+
+
+def _mic_preference_bonus(name: str) -> int:
+    lower = name.lower()
+    for hint in _HEADSET_HINTS:
+        if hint in lower:
+            return 3
+    return 0
 
 
 def resolve_mic(device: Optional[int] = None) -> Optional[int]:
@@ -78,20 +131,34 @@ def resolve_mic(device: Optional[int] = None) -> Optional[int]:
             if dev["max_input_channels"] <= 0:
                 continue
             if prefer == str(i) or prefer.lower() in dev["name"].lower():
-                if _measure(i) > 0.0:
-                    _MIC_CACHE = i
-                    return _MIC_CACHE
+                _MIC_CACHE = i
+                return _MIC_CACHE
 
+    # Prefer a headset/Bluetooth device by name — do NOT open it here, because
+    # Bluetooth hands-free mics can block indefinitely on InputStream open.
+    for i, dev in enumerate(sd.query_devices()):
+        if dev["max_input_channels"] <= 0:
+            continue
+        if _mic_preference_bonus(dev["name"]) > 0 and _mic_quality_penalty(dev["name"]) < 2:
+            _MIC_CACHE = i
+            return _MIC_CACHE
+
+    # Fallback: measure non-headset devices only.
     best_idx: Optional[int] = None
     best_rms = 0.0
     for i, dev in enumerate(sd.query_devices()):
         if dev["max_input_channels"] <= 0:
             continue
+        if _mic_preference_bonus(dev["name"]) > 0:
+            continue
+        penalty = _mic_quality_penalty(dev["name"])
+        if penalty >= 2:
+            continue
         rms = _measure(i)
         if rms > best_rms:
             best_rms = rms
             best_idx = i
-    _MIC_CACHE = best_idx if best_rms > 0.0 else None
+    _MIC_CACHE = best_idx
     return _MIC_CACHE
 
 
@@ -216,11 +283,13 @@ async def record_until_silence(
 
     silences_to_stop = max(1, int(silence_duration / block_size))
     min_blocks = int(min_duration / block_size)
+    arm_blocks = max(2, int(0.3 / block_size))
 
     start_time = time.monotonic()
     speech: list[np.ndarray] = []
     silence_blocks = 0
     listening = True
+    armed = 0
     noise_floor: list[float] = []
     eff_threshold = threshold
     try:
@@ -240,17 +309,21 @@ async def record_until_silence(
                     if len(noise_floor) > 30:
                         noise_floor.pop(0)
                     baseline = float(np.median(noise_floor[-10:]))
-                    eff_threshold = max(0.015, baseline * 5.0)
+                    eff_threshold = max(0.003, baseline * 8.0)
                 if elapsed >= listen_timeout:
                     return None
 
             if level >= eff_threshold:
-                if listening:
+                armed += 1
+                if listening and armed >= arm_blocks:
                     listening = False
-                speech.append(data)
-                silence_blocks = 0
+                if not listening:
+                    speech.append(data)
+                    silence_blocks = 0
             else:
                 if listening:
+                    if armed > 0:
+                        armed -= 1
                     continue
                 speech.append(data)
                 silence_blocks += 1

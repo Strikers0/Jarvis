@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -36,6 +36,7 @@ class SarvamConfig(BaseModel):
     tts_model: str = "sarvam-1"
     stt_language_code: str = "unknown"
     tts_language_code: str = "unknown"
+    stt_with_translation: bool = True
     tts_speaker: str = "meera"
     tts_pitch: float = 0.0
     tts_pace: float = 1.0
@@ -47,6 +48,8 @@ class VoiceConfig(BaseModel):
     provider: Literal["whisper", "sarvam"] = "whisper"
     stt_provider: Literal["whisper", "sarvam"] = "whisper"
     tts_provider: Literal["piper", "sarvam"] = "piper"
+    silence_duration: float = 0.5  # seconds of quiet after speech before processing starts
+    listen_timeout: float = 15.0
 
 
 class PersonalityConfig(BaseModel):
@@ -99,6 +102,54 @@ class LoggingConfig(BaseModel):
     format: Literal["console", "json"] = "console"
 
 
+class EmailConfig(BaseModel):
+    imap_host: str = ""
+    imap_port: int = 993
+    smtp_host: str = ""
+    smtp_port: int = 587
+    use_ssl: bool = True
+    username: str = ""
+    password: str = ""
+    from_address: str = ""
+
+
+class CalendarConfig(BaseModel):
+    provider: Literal["local", "google"] = "local"
+    db_path: str = "calendar.db"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_refresh_token: str = ""
+    google_calendar_id: str = "primary"
+    reminders_enabled: bool = True
+
+
+class CallingConfig(BaseModel):
+    provider: Literal["local", "twilio"] = "local"
+    db_path: str = "calls.db"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+
+
+class NotesConfig(BaseModel):
+    db_path: str = "notes.db"
+
+
+class ExternalConfig(BaseModel):
+    weather_api_key: str = ""
+    news_api_key: str = ""
+    default_city: str = ""
+
+
+class ServicesConfig(BaseModel):
+    enabled: bool = True
+    email: EmailConfig = Field(default_factory=EmailConfig)
+    calendar: CalendarConfig = Field(default_factory=CalendarConfig)
+    calling: CallingConfig = Field(default_factory=CallingConfig)
+    notes: NotesConfig = Field(default_factory=NotesConfig)
+    external: ExternalConfig = Field(default_factory=ExternalConfig)
+
+
 class AppConfig(BaseModel):
     llm: LLMProviderConfig = Field(default_factory=LLMProviderConfig)
     openrouter: OpenRouterConfig = Field(default_factory=OpenRouterConfig)
@@ -112,6 +163,7 @@ class AppConfig(BaseModel):
     tts: TTSConfig = Field(default_factory=TTSConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tool: ToolConfig = Field(default_factory=ToolConfig)
+    services: ServicesConfig = Field(default_factory=ServicesConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
 
@@ -159,6 +211,52 @@ class ConfigManager:
         api_key = os.getenv("SARVAM_API_KEY")
         if api_key:
             config.setdefault("sarvam", {})["api_key"] = api_key
+
+        email_username = os.getenv("EMAIL_USERNAME")
+        if email_username:
+            config.setdefault("services", {}).setdefault("email", {})["username"] = email_username
+        email_password = os.getenv("EMAIL_PASSWORD")
+        if email_password:
+            config.setdefault("services", {}).setdefault("email", {})["password"] = email_password
+        email_imap = os.getenv("EMAIL_IMAP_HOST")
+        if email_imap:
+            config.setdefault("services", {}).setdefault("email", {})["imap_host"] = email_imap
+        email_smtp = os.getenv("EMAIL_SMTP_HOST")
+        if email_smtp:
+            config.setdefault("services", {}).setdefault("email", {})["smtp_host"] = email_smtp
+        email_from = os.getenv("EMAIL_FROM")
+        if email_from:
+            config.setdefault("services", {}).setdefault("email", {})["from_address"] = email_from
+
+        weather_key = os.getenv("WEATHER_API_KEY")
+        if weather_key:
+            config.setdefault("services", {}).setdefault("external", {})["weather_api_key"] = weather_key
+        news_key = os.getenv("NEWS_API_KEY")
+        if news_key:
+            config.setdefault("services", {}).setdefault("external", {})["news_api_key"] = news_key
+
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        if twilio_sid:
+            config.setdefault("services", {}).setdefault("calling", {})["twilio_account_sid"] = twilio_sid
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        if twilio_token:
+            config.setdefault("services", {}).setdefault("calling", {})["twilio_auth_token"] = twilio_token
+        twilio_from = os.getenv("TWILIO_FROM_NUMBER")
+        if twilio_from:
+            config.setdefault("services", {}).setdefault("calling", {})["twilio_from_number"] = twilio_from
+
+        google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+        if google_client_id:
+            config.setdefault("services", {}).setdefault("calendar", {})["google_client_id"] = google_client_id
+        google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        if google_client_secret:
+            config.setdefault("services", {}).setdefault("calendar", {})["google_client_secret"] = google_client_secret
+        google_refresh = os.getenv("GOOGLE_REFRESH_TOKEN")
+        if google_refresh:
+            config.setdefault("services", {}).setdefault("calendar", {})["google_refresh_token"] = google_refresh
+        google_calendar = os.getenv("GOOGLE_CALENDAR_ID")
+        if google_calendar:
+            config.setdefault("services", {}).setdefault("calendar", {})["google_calendar_id"] = google_calendar
 
         return config
 

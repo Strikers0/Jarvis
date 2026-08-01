@@ -16,11 +16,13 @@ class SarvamSTT:
         api_key: str,
         model: str = "saarika:v2.5",
         language_code: str = "unknown",
+        with_translation: bool = True,
         max_retries: int = 1,
     ):
         self.api_key = api_key
         self.model = model
         self.language_code = language_code
+        self.with_translation = with_translation
         self.max_retries = max_retries
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -46,6 +48,8 @@ class SarvamSTT:
                     "language_code": (None, lang),
                     "model": (None, self.model),
                 }
+                if self.with_translation:
+                    files["with_translation"] = (None, "true")
                 headers = {"api-subscription-key": self.api_key}
                 resp = await self.client.post(
                     f"{self.BASE_URL}/speech-to-text",
@@ -54,7 +58,10 @@ class SarvamSTT:
                 )
                 resp.raise_for_status()
                 data = resp.json()
+                translation = data.get("translation", "")
                 transcript = data.get("transcript", "")
+                if self.with_translation and translation:
+                    return self._normalize_text(translation)
                 return self._normalize_text(transcript)
             except httpx.TimeoutException as e:
                 last_error = e

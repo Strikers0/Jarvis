@@ -20,7 +20,8 @@ sarvam:
   # API key: use SARVAM_API_KEY env var only — never hardcode here
   stt_model: "saaras:v3"                 # STT model: sarvam-1
   tts_model: "bulbul:v3"                 # TTS model: sarvam-1
-  stt_language_code: unknown          # language code for STT
+  stt_language_code: "hi-IN"          # language code for STT (Hinglish/Hindi input)
+  stt_with_translation: true          # transcribe Hinglish audio, output English text
   tts_language_code: "hi-IN"          # language code for TTS
   tts_speaker: priya                # TTS speaker voice
   tts_pitch: 0.0
@@ -32,9 +33,11 @@ voice:
   provider:   sarvam                 # overall voice provider (whisper, sarvam)
   stt_provider: sarvam               # whisper or sarvam
   tts_provider: sarvam                 # piper or sarvam
+  silence_duration: 1.0            # seconds of quiet after speech before processing
+  listen_timeout: 15.0             # max seconds to wait for you to start speaking
 
 personality:
-  active: jarvis
+  active: JARVIS
 
 conversation:
   max_history: 50
@@ -76,6 +79,43 @@ tool:
       level: auto
     search_youtube:
       level: auto
+
+services:
+  enabled: true
+  email:
+    # API keys never here. Use env vars: EMAIL_USERNAME, EMAIL_PASSWORD,
+    # EMAIL_IMAP_HOST, EMAIL_SMTP_HOST, EMAIL_FROM (app password recommended).
+    imap_host: ""          # e.g. imap.gmail.com
+    imap_port: 993
+    smtp_host: ""          # e.g. smtp.gmail.com
+    smtp_port: 587
+    use_ssl: true
+    username: ""
+    password: ""
+    from_address: ""
+  calendar:
+    provider: local       # local or google
+    db_path: calendar.db
+    # For Google Calendar, set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET /
+    # GOOGLE_REFRESH_TOKEN / GOOGLE_CALENDAR_ID env vars.
+    google_client_id: ""
+    google_client_secret: ""
+    google_refresh_token: ""
+    google_calendar_id: primary
+    reminders_enabled: true
+  calling:
+    provider: local       # local or twilio (set TWILIO_* env vars)
+    db_path: calls.db
+    twilio_account_sid: ""
+    twilio_auth_token: ""
+    twilio_from_number: ""
+  notes:
+    db_path: notes.db
+  external:
+    # Optional keys via env: WEATHER_API_KEY, NEWS_API_KEY
+    weather_api_key: ""
+    news_api_key: ""
+    default_city: ""
 
 logging:
   level: info

@@ -1,6 +1,6 @@
 # JARVIS - Intelligent Personal AI Assistant
 
-A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, and desktop/browser automation via LLM function calling.
+A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, desktop/browser automation via LLM function calling, and **communication & productivity services** (email, calendar, notes, calls, weather & news).
 
 ## Setup
 
@@ -120,6 +120,10 @@ Listening...
 | `/memory` | Show stored memories |
 | `/tools` | List available automation tools |
 | `/audit` | Show tool execution audit log |
+| `/services` | Show communication/producitivity service health |
+| `/notes` | List saved notes |
+| `/todos` | List to-do items |
+| `/remind` | List upcoming reminders |
 | `/help` | Show help |
 | `/exit` | Exit |
 
@@ -218,7 +222,7 @@ Audio File → PyAV decode → Resample (16kHz mono) → WAV in memory → Sarva
 
 JARVIS can perform desktop tasks and browser automation via LLM-powered function calling. Every interaction is permission-controlled and audited.
 
-### Available Tools (25 total)
+### Available Tools (54 total)
 
 **Desktop (11)**
 | Tool | Description |
@@ -304,6 +308,38 @@ playwright install chromium
 
 ---
 
+## Communication & Productivity Services (Phase 4)
+
+JARVIS can send/read email, manage calendar events and reminders, take notes and to-dos, look up weather/news/stocks, and place calls. Everything is registered as LLM tools, so you can just ask in natural language.
+
+### Available Service Tools
+
+| Service | Tools |
+|---|---|
+| **Email** (`send_email`, `read_unread_emails`, `search_emails`) | IMAP/SMTP. For Gmail use an **App Password**. Configure via env: `EMAIL_IMAP_HOST`, `EMAIL_SMTP_HOST`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_FROM` |
+| **Calendar** (`create_event`, `list_events`, `search_events`, `delete_event`, `create_reminder`, `list_reminders`, `delete_reminder`) | Local SQLite by default; optional Google Calendar sync via OAuth2 (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`). Natural-language times: "tomorrow at 10am", "in 2 hours", "next friday at 3pm" |
+| **Notes & To-Do** (`create_note`, `list_notes`, `search_notes`, `delete_note`, `create_todo`, `list_todos`, `mark_todo`, `delete_todo`) | Local SQLite (`notes.db`) |
+| **External APIs** (`get_weather`, `get_news`, `get_stock`, `get_crypto`, `get_wikipedia`) | Weather via OpenWeatherMap or wttr.in fallback (no key needed); news via NewsAPI or Google News RSS fallback; stocks via Yahoo Finance; crypto via CoinGecko; Wikipedia summaries |
+| **Phone calls** (`make_call`, `save_contact`, `list_contacts`, `call_logs`) | Twilio VoIP when configured (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `provider: twilio`); local contacts + call log otherwise |
+
+### Example Queries
+
+> "Send an email to john@example.com titled Project Update saying the deployment is done"
+> "What unread emails do I have?"
+> "Add a calendar event for tomorrow at 10am called Team Standup"
+> "Remind me in 2 hours to take a break"
+> "Create a note called Shopping with items milk and eggs"
+> "Add buy groceries to my to-dos"
+> "What's the weather in Delhi?"
+> "Get the latest news about AI"
+> "Call Mom"
+
+### Service Health
+
+Use `/services` in the CLI to see which services are configured and reachable. Unconfigured services (e.g. email without keys) return an error status but never crash the assistant.
+
+---
+
 ## Live Voice Mode
 
 See the [Live Voice Mode](#live-voice-mode-talk-to-jarvis) usage section above. The voice stack lives in `voice/`:
@@ -332,8 +368,17 @@ jarvis/
 │   │   ├── media.py   # Media control tools
 │   │   ├── system.py  # File & system tools
 │   │   └── win.py     # PowerShell desktop helpers (keys, mouse, clipboard)
+│   ├── services/      # Phase 4: communication & productivity
+│   │   ├── base.py    # Service ABC + service_tool() tool factory
+│   │   ├── notes.py   # Notes & to-dos (SQLite)
+│   │   ├── email.py   # IMAP/SMTP send & read
+│   │   ├── calendar.py# Events, reminders, Google Calendar OAuth2
+│   │   ├── external.py# Weather, news, stocks, crypto, Wikipedia
+│   │   ├── calling.py # Twilio calls + contacts + call log
+│   │   └── __init__.py# ServiceManager orchestration
 │   └── agent/         # Agent orchestration
 │       └── graph.py   # AgentGraph (analyze → select → execute → synthesize)
+├── tests/             # Unit tests (pytest)
 ├── voice/             # Voice pipeline
 │   ├── sarvam_stt.py  # Sarvam STT API wrapper
 │   ├── sarvam_tts.py  # Sarvam TTS API wrapper
