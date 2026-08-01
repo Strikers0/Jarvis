@@ -10,6 +10,11 @@ def main() -> None:
     from dotenv import load_dotenv
     load_dotenv()
 
+    if "--voice" in sys.argv:
+        from cli.voice_live import voice_live
+        asyncio.run(voice_live())
+        return
+
     audio_path = None
     if "--audio" in sys.argv:
         idx = sys.argv.index("--audio")

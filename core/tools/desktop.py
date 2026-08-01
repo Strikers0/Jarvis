@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
+import tempfile
+from datetime import datetime
 from pathlib import Path
 
+from core.tools import win
 from core.tools.base import Tool, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -123,11 +126,8 @@ class TypeTextTool(Tool):
 
     async def execute(self, text: str, interval: float = 0.05) -> ToolResult:
         try:
-            import pyautogui
-            pyautogui.write(text, interval=interval)
+            await win.type_text(text, interval)
             return ToolResult(success=True, output=f"Typed text ({len(text)} characters)")
-        except ImportError:
-            return ToolResult(success=False, error="pyautogui is not installed. Install with: pip install pyautogui")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to type text: {e}")
 
@@ -153,17 +153,8 @@ class PressKeyTool(Tool):
 
     async def execute(self, key: str) -> ToolResult:
         try:
-            import pyautogui
-            if "+" in key:
-                parts = key.lower().split("+")
-                modifiers = [p.strip() for p in parts[:-1]]
-                main_key = parts[-1].strip()
-                pyautogui.hotkey(*modifiers, main_key)
-            else:
-                pyautogui.press(key)
+            await win.press_key(key)
             return ToolResult(success=True, output=f"Pressed key: {key}")
-        except ImportError:
-            return ToolResult(success=False, error="pyautogui is not installed")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to press key: {e}")
 
@@ -206,14 +197,10 @@ class ClickTool(Tool):
 
     async def execute(self, x: int = -1, y: int = -1, button: str = "left", clicks: int = 1) -> ToolResult:
         try:
-            import pyautogui
+            await win.click(x, y, button, clicks)
             if x >= 0 and y >= 0:
-                pyautogui.click(x=x, y=y, button=button, clicks=clicks)
                 return ToolResult(success=True, output=f"Clicked at ({x}, {y}) with {button} button")
-            pyautogui.click(button=button, clicks=clicks)
             return ToolResult(success=True, output=f"Clicked at current position with {button} button")
-        except ImportError:
-            return ToolResult(success=False, error="pyautogui is not installed")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to click: {e}")
 
@@ -240,16 +227,10 @@ class ScreenshotTool(Tool):
 
     async def execute(self, save_path: str = "") -> ToolResult:
         try:
-            import pyautogui
             if not save_path:
-                import tempfile
                 save_path = str(Path(tempfile.gettempdir()) / f"jarvis_screenshot_{datetime.now():%Y%m%d_%H%M%S}.png")
-            from datetime import datetime
-            screenshot = pyautogui.screenshot()
-            screenshot.save(save_path)
+            await win.screenshot(save_path)
             return ToolResult(success=True, output=f"Screenshot saved to {save_path}", data={"path": save_path})
-        except ImportError:
-            return ToolResult(success=False, error="pyautogui is not installed")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to take screenshot: {e}")
 
@@ -350,7 +331,11 @@ class GetClipboardTool(Tool):
             text = pyperclip.paste()
             return ToolResult(success=True, output=f"Clipboard content: {text[:1000]}", data={"text": text[:5000]})
         except ImportError:
-            return ToolResult(success=False, error="pyperclip is not installed. Install with: pip install pyperclip")
+            try:
+                text = await win.get_clipboard()
+                return ToolResult(success=True, output=f"Clipboard content: {text[:1000]}", data={"text": text[:5000]})
+            except Exception as e:
+                return ToolResult(success=False, error=f"Failed to read clipboard: {e}")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to read clipboard: {e}")
 
@@ -380,7 +365,11 @@ class SetClipboardTool(Tool):
             pyperclip.copy(text)
             return ToolResult(success=True, output=f"Copied to clipboard ({len(text)} characters)")
         except ImportError:
-            return ToolResult(success=False, error="pyperclip is not installed")
+            try:
+                await win.set_clipboard(text)
+                return ToolResult(success=True, output=f"Copied to clipboard ({len(text)} characters)")
+            except Exception as e:
+                return ToolResult(success=False, error=f"Failed to set clipboard: {e}")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to set clipboard: {e}")
 
@@ -406,16 +395,10 @@ class FocusWindowTool(Tool):
 
     async def execute(self, title: str) -> ToolResult:
         try:
-            import pygetwindow as gw
-            windows = gw.getWindowsWithTitle(title)
-            if not windows:
-                windows = [w for w in gw.getAllWindows() if title.lower() in w.title.lower()]
-            if windows:
-                windows[0].activate()
-                return ToolResult(success=True, output=f"Focused window: {windows[0].title}")
+            focused = await win.focus_window(title)
+            if focused:
+                return ToolResult(success=True, output=f"Focused window: {title}")
             return ToolResult(success=False, error=f"No window found matching '{title}'")
-        except ImportError:
-            return ToolResult(success=False, error="pygetwindow is not installed. Install with: pip install pygetwindow")
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to focus window: {e}")
 

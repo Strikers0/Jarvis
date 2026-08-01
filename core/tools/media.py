@@ -4,6 +4,7 @@ import asyncio
 import logging
 import subprocess
 
+from core.tools import win
 from core.tools.base import Tool, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -78,11 +79,8 @@ class MediaControlTool(Tool):
         if not key:
             return ToolResult(success=False, error=f"Unknown media action: {action}")
         try:
-            import pyautogui
-            pyautogui.press(key)
+            await win.media_key(key)
             return ToolResult(success=True, output=f"Media action '{action}' executed")
-        except ImportError:
-            return ToolResult(success=False, error="pyautogui is not installed")
         except Exception as e:
             return ToolResult(success=False, error=f"Media control failed: {e}")
 

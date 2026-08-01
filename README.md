@@ -1,6 +1,6 @@
 # JARVIS - Intelligent Personal AI Assistant
 
-A terminal-based AI assistant with personality switching, conversation memory, audio file processing via Sarvam API, and desktop/browser automation via LLM function calling.
+A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, and desktop/browser automation via LLM function calling.
 
 ## Setup
 
@@ -59,6 +59,51 @@ Process an audio file through Sarvam STT → LLM → Sarvam TTS:
 Supported formats: `.mp3`, `.wav`, `.m4a`.
 
 Automatic conversion to 16 kHz mono PCM WAV is done internally. Output is saved to `runtime/response.wav`.
+
+### Live Voice Mode (Talk to JARVIS)
+
+Have a live spoken conversation: **microphone → Sarvam STT → LLM (with tool use) → Sarvam TTS → speaker**.
+
+```powershell
+.\venv\Scripts\python.exe main.py --voice
+```
+
+Requirements:
+- `SARVAM_API_KEY` set in `.env` — used for both speech-to-text and text-to-speech
+- A working microphone (auto-detected on startup)
+
+On launch you'll see which microphone was selected:
+
+```
+Loaded 25 tools
+Using microphone: Headset (Airdopes 219 Hands-Free AG Audio)
+Voice mode active. Speak... (Ctrl+C to stop)
+Listening...
+```
+
+**How it works:**
+
+1. JARVIS listens continuously. Speak, then pause for ~1 second — it stops recording on silence.
+2. Speech is transcribed by Sarvam STT.
+3. The text is sent to the LLM **with all tools enabled**, so you can command it by voice:
+   - "Open Chrome and search for Python tutorials"
+   - "Play lofi music on YouTube"
+   - "Search the web for the weather today"
+   - "Take a screenshot"
+4. The reply is spoken aloud via Sarvam TTS, then JARVIS listens again.
+
+**Notes:**
+- Press **Ctrl+C** to stop voice mode.
+- The spoken reply is also saved to `runtime/response.wav`.
+- **Microphone selection:** the loudest working input device is chosen automatically. To force a specific mic, set the device name (or index) via the `JARVIS_MIC_DEVICE` environment variable:
+
+  ```powershell
+  $env:JARVIS_MIC_DEVICE = "Airdopes"   # any substring of the device name
+  python main.py --voice
+  ```
+
+  Run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list device names and indices.
+- The speech/noise threshold auto-calibrates on every listen, so it adapts to your microphone and room noise.
 
 ### In-Chat Commands
 
@@ -173,7 +218,7 @@ Audio File → PyAV decode → Resample (16kHz mono) → WAV in memory → Sarva
 
 JARVIS can perform desktop tasks and browser automation via LLM-powered function calling. Every interaction is permission-controlled and audited.
 
-### Available Tools (24 total)
+### Available Tools (25 total)
 
 **Desktop (11)**
 | Tool | Description |
@@ -188,9 +233,10 @@ JARVIS can perform desktop tasks and browser automation via LLM-powered function
 | `get_clipboard` / `set_clipboard` | Read or write system clipboard |
 | `focus_window` | Bring a window to focus by title |
 
-**Browser (4)**
+**Browser (5)**
 | Tool | Description |
 |---|---|
+| `search_web` | General web search, return top results |
 | `search_google` | Search Google, return top results |
 | `search_youtube` | Search YouTube, return video links |
 | `open_url` | Navigate to a URL |
@@ -258,6 +304,17 @@ playwright install chromium
 
 ---
 
+## Live Voice Mode
+
+See the [Live Voice Mode](#live-voice-mode-talk-to-jarvis) usage section above. The voice stack lives in `voice/`:
+
+```
+Microphone (auto-detected) → callback recorder → VAD (silence detection)
+    → Sarvam STT → LLM (with tools) → Sarvam TTS → speaker (non-blocking playback)
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -270,20 +327,25 @@ jarvis/
 │   ├── memory/        # Long-term & vector memory
 │   ├── tools/         # Tool calling framework
 │   │   ├── base.py    # Tool ABC, ToolRegistry, ToolDispatcher, PermissionManager
-│   │   ├── desktop.py # Desktop automation (PyAutoGUI)
-│   │   ├── browser.py # Browser automation (Playwright)
+│   │   ├── desktop.py # Desktop automation (PowerShell/user32 helpers in win.py)
+│   │   ├── browser.py # Browser automation (Playwright + HTTP fallback)
 │   │   ├── media.py   # Media control tools
-│   │   └── system.py  # File & system tools
+│   │   ├── system.py  # File & system tools
+│   │   └── win.py     # PowerShell desktop helpers (keys, mouse, clipboard)
 │   └── agent/         # Agent orchestration
 │       └── graph.py   # AgentGraph (analyze → select → execute → synthesize)
-├── voice/             # Sarvam API voice processing
+├── voice/             # Voice pipeline
 │   ├── sarvam_stt.py  # Sarvam STT API wrapper
 │   ├── sarvam_tts.py  # Sarvam TTS API wrapper
 │   ├── pipeline.py    # STT → LLM → TTS pipeline
+│   ├── microphone.py  # Mic auto-detection + callback recorder + VAD
+│   ├── player.py      # Non-blocking WAV playback
+│   ├── controller.py  # VoiceController (live listen → STT → LLM → TTS loop)
 │   └── logger.py      # Voice logging
 ├── cli/
 │   ├── main.py        # Chat CLI interface
-│   └── voice_main.py  # Audio file processor
+│   ├── voice_main.py  # Audio file processor
+│   └── voice_live.py  # Live voice mode entry (main.py --voice)
 ├── personalities/     # Personality definitions
 ├── config.yaml        # User settings
 ├── .env.example       # API key template (copy to .env)
@@ -303,4 +365,7 @@ jarvis/
 | `ModuleNotFoundError` | Activate venv: `.\venv\Scripts\Activate.ps1` |
 | `Sarvam STT/TTS error` | Check `SARVAM_API_KEY` is set in `.env` or as an environment variable |
 | `--audio`: "File not found" | Check the file path; use absolute path if needed |
+| Voice mode picks a mic that hears nothing | Force a working mic: `$env:JARVIS_MIC_DEVICE = "<device name>"` then `python main.py --voice` |
+| Voice mode never hears me / threshold too high | Speak closer to the mic, or in a quiet room; the threshold auto-calibrates each listen |
+| No audio plays back | Check speakers/volume; response is saved to `runtime/response.wav` |
 | Personality not found | Names are case-insensitive; use `/personality` to list |
