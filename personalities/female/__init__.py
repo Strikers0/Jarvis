@@ -100,6 +100,7 @@ CHEERFUL_COMPANION = Personality(
         formality="casual",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="kavya",
 )
 
 
@@ -151,7 +152,7 @@ KAAYA = Personality(
         formality="very casual",
     ),
     voice_id="en_US-amy-low",
-    sarvam_voice="priya",
+    sarvam_voice="tanya",
 )
 
 FEMALE_PERSONALITIES: dict[str, Personality] = {
