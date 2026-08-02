@@ -38,7 +38,7 @@ FRIENDLY_BUDDY = Personality(
         formality="casual",
     ),
     voice_id="en_US-amy-low",
-    sarvam_voice="manan",
+    sarvam_voice="advait",
 )
 
 TEACHER = Personality(
@@ -58,7 +58,7 @@ TEACHER = Personality(
         formality="neutral",
     ),
     voice_id="en_US-lessac-medium",
-    sarvam_voice="aditya",
+    sarvam_voice="anand",
 )
 
 MOTIVATOR_MALE = Personality(
@@ -78,7 +78,7 @@ MOTIVATOR_MALE = Personality(
         formality="casual",
     ),
     voice_id="en_US-lessac-medium",
-    sarvam_voice="dev",
+    sarvam_voice="kabir",
 )
 
 FUNNY = Personality(
@@ -98,7 +98,7 @@ FUNNY = Personality(
         formality="casual",
     ),
     voice_id="en_US-lessac-medium",
-    sarvam_voice="rohan",
+    sarvam_voice="sunny",
 )
 
 MALE_PERSONALITIES: dict[str, Personality] = {
