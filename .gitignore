@@ -42,6 +42,8 @@ output.*
 runtime/
 vector_memory/
 session_*.json
+*.session
+*.session-journal
 test_*.txt
 test_*.wav
 

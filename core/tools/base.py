@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from core.llm import LLMMessage
 
@@ -158,10 +158,12 @@ class ToolDispatcher:
         registry: ToolRegistry,
         permission_manager: PermissionManager,
         confirm_callback: Optional[Callable[[str, dict[str, Any]], bool]] = None,
+        async_confirm_callback: Optional[Callable[[str, dict[str, Any]], Awaitable[bool]]] = None,
     ):
         self.registry = registry
         self.permissions = permission_manager
         self.confirm_callback = confirm_callback
+        self.async_confirm_callback = async_confirm_callback
 
     async def dispatch(self, tool_name: str, args: dict[str, Any]) -> ToolResult:
         tool = self.registry.get(tool_name)
@@ -172,8 +174,13 @@ class ToolDispatcher:
 
         if level == "deny":
             return ToolResult(success=False, error=f"Tool '{tool_name}' is denied by permission settings")
-        elif level == "confirm" and self.confirm_callback:
-            confirmed = self.confirm_callback(tool_name, args)
+        elif level == "confirm":
+            if self.async_confirm_callback:
+                confirmed = await self.async_confirm_callback(tool_name, args)
+            elif self.confirm_callback:
+                confirmed = self.confirm_callback(tool_name, args)
+            else:
+                confirmed = False
             if not confirmed:
                 return ToolResult(success=False, error=f"Tool '{tool_name}' execution cancelled by user")
 

@@ -12,21 +12,8 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
-from core.config import ConfigManager
-from core.conversation import MemoryAwareConversationManager
-from core.llm import LLMFactory, LLMMessage
-from core.memory import MemoryManager
-from core.personality import PersonalityManager
-from core.services import ServiceManager
-from core.tools import (
-    BrowserAutomationToolSet,
-    DesktopAutomationToolSet,
-    MediaToolSet,
-    PermissionManager,
-    SystemToolSet,
-    ToolDispatcher,
-    ToolRegistry,
-)
+from core.llm import LLMMessage
+from core.session import JarvisSession
 
 console = Console()
 
@@ -68,74 +55,26 @@ def print_welcome() -> None:
 
 class JARVISCLI:
     def __init__(self):
-        self.config_manager = ConfigManager()
-        self.config = self.config_manager.config
-        self.personality_manager = PersonalityManager()
-        self.memory_manager = MemoryManager(
-            db_path=self.config.memory.db_path
-        )
-        self.conversation = MemoryAwareConversationManager(
-            db_path=Path.cwd() / "conversations.db",
-            max_history=self.config.conversation.max_history,
-            memory_manager=self.memory_manager,
-            auto_extract=self.config.memory.auto_extract,
-            max_facts_in_context=self.config.memory.max_facts_in_context,
-        )
-        self.llm: Optional[object] = None
-        self.tool_registry = ToolRegistry()
-        self.permission_manager = PermissionManager()
-        self.tool_dispatcher: Optional[ToolDispatcher] = None
-        self.service_manager: Optional[ServiceManager] = None
-        self._init_personality()
+        self.session = JarvisSession(confirm_callback=self._confirm_tool_execution)
+        if not self.config.tool.enabled:
+            console.print("[dim]Tool use is disabled in config.[/dim]")
+        else:
+            console.print(f"[dim]Loaded {len(self.tool_registry)} tools[/dim]")
         self._init_llm()
-        self._init_tools()
-        self._init_session()
 
-    def _init_personality(self) -> None:
-        active_name = self.config.personality.active
-        personality = self.personality_manager.set_active(active_name)
-        if not personality:
-            personality = self.personality_manager.set_active("jarvis")
-        console.print(f"[dim]Active personality: {personality.name if personality else 'unknown'}[/dim]")
+    def __getattr__(self, name):
+        session = self.__dict__.get("session")
+        if session is not None:
+            return getattr(session, name)
+        raise AttributeError(name)
 
     def _init_llm(self) -> None:
         try:
-            self.llm = LLMFactory.create(self.config)
+            self.session._ensure_llm()
         except ValueError as e:
             console.print(f"[bold red]Error:[/bold red] {e}")
             console.print("[yellow]Please set the appropriate API key in your environment or .env file.[/yellow]")
             sys.exit(1)
-
-    def _init_tools(self) -> None:
-        if not self.config.tool.enabled:
-            console.print("[dim]Tool use is disabled in config.[/dim]")
-            return
-
-        tool_sets = [
-            DesktopAutomationToolSet(),
-            BrowserAutomationToolSet(),
-            MediaToolSet(),
-            SystemToolSet(),
-        ]
-        for ts in tool_sets:
-            self.tool_registry.register_set(ts)
-
-        if self.config.services.enabled:
-            self.service_manager = ServiceManager(self.config)
-            self.tool_registry.register_set(self.service_manager)
-
-        perms = {}
-        for tool_name, perm_cfg in self.config.tool.permissions.items():
-            perms[tool_name] = perm_cfg.level
-        self.permission_manager.load_config(perms)
-
-        self.tool_dispatcher = ToolDispatcher(
-            registry=self.tool_registry,
-            permission_manager=self.permission_manager,
-            confirm_callback=self._confirm_tool_execution,
-        )
-
-        console.print(f"[dim]Loaded {len(self.tool_registry)} tools[/dim]")
 
     def _confirm_tool_execution(self, tool_name: str, args: dict) -> bool:
         import json
@@ -153,10 +92,6 @@ class JARVISCLI:
             console.print(f"[green]Set '{tool_name}' permission to auto (always allow).[/green]")
             return True
         return result.lower() == "y"
-
-    def _init_session(self) -> None:
-        session_name = "JARVIS Session"
-        self.conversation.create_session(session_name)
 
     def _get_active_personality(self) -> str:
         p = self.personality_manager.get_active()

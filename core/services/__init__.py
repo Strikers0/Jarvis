@@ -8,7 +8,9 @@ from core.services.calendar import CalendarService, GoogleCalendarClient
 from core.services.calling import CallingService
 from core.services.email import EmailService
 from core.services.external import ExternalAPIsService
+from core.services.messaging import InboundMessage, MessagingService, OutboundMessage
 from core.services.notes import NotesService
+from core.services.telegram import TelegramService
 from core.tools.base import Tool
 
 logger = logging.getLogger(__name__)
@@ -73,6 +75,17 @@ class ServiceManager:
             twilio_from_number=svc.calling.twilio_from_number,
         ))
 
+        telegram_cfg = getattr(svc, "telegram", None)
+        if telegram_cfg and telegram_cfg.enabled:
+            self.add(TelegramService(
+                api_id=telegram_cfg.api_id,
+                api_hash=telegram_cfg.api_hash,
+                session_name=telegram_cfg.session_name,
+                allowed_users=telegram_cfg.allowed_users,
+                owner_chat_id=telegram_cfg.owner_chat_id,
+                voice_enabled=telegram_cfg.voice_enabled,
+            ))
+
     def add(self, service: Service) -> None:
         self.services[service.name] = service
 
@@ -107,7 +120,8 @@ class ServiceManager:
 
 __all__ = [
     "Service", "service_tool",
+    "MessagingService", "InboundMessage", "OutboundMessage",
     "ServiceManager",
     "NotesService", "EmailService", "CalendarService", "GoogleCalendarClient",
-    "ExternalAPIsService", "CallingService",
+    "ExternalAPIsService", "CallingService", "TelegramService",
 ]

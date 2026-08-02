@@ -135,6 +135,16 @@ class NotesConfig(BaseModel):
     db_path: str = "notes.db"
 
 
+class TelegramConfig(BaseModel):
+    enabled: bool = False
+    api_id: int = 0
+    api_hash: str = ""
+    session_name: str = "jarvis_telegram"
+    allowed_users: list[int] = Field(default_factory=list)
+    owner_chat_id: int = 0
+    voice_enabled: bool = True
+
+
 class ExternalConfig(BaseModel):
     weather_api_key: str = ""
     news_api_key: str = ""
@@ -147,6 +157,7 @@ class ServicesConfig(BaseModel):
     calendar: CalendarConfig = Field(default_factory=CalendarConfig)
     calling: CallingConfig = Field(default_factory=CallingConfig)
     notes: NotesConfig = Field(default_factory=NotesConfig)
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
 
 
@@ -257,6 +268,24 @@ class ConfigManager:
         google_calendar = os.getenv("GOOGLE_CALENDAR_ID")
         if google_calendar:
             config.setdefault("services", {}).setdefault("calendar", {})["google_calendar_id"] = google_calendar
+
+        telegram = config.setdefault("services", {}).setdefault("telegram", {})
+        if os.getenv("TELEGRAM_API_ID"):
+            telegram["api_id"] = int(os.getenv("TELEGRAM_API_ID"))
+        if os.getenv("TELEGRAM_API_HASH"):
+            telegram["api_hash"] = os.getenv("TELEGRAM_API_HASH")
+        if os.getenv("TELEGRAM_SESSION_NAME"):
+            telegram["session_name"] = os.getenv("TELEGRAM_SESSION_NAME")
+        if os.getenv("TELEGRAM_ALLOWED_USERS"):
+            telegram["allowed_users"] = [
+                int(u.strip()) for u in os.getenv("TELEGRAM_ALLOWED_USERS", "").split(",") if u.strip()
+            ]
+        if os.getenv("TELEGRAM_OWNER_CHAT_ID"):
+            telegram["owner_chat_id"] = int(os.getenv("TELEGRAM_OWNER_CHAT_ID"))
+        if os.getenv("TELEGRAM_ENABLED", "").lower() in ("1", "true", "yes"):
+            telegram["enabled"] = True
+        if os.getenv("TELEGRAM_VOICE_ENABLED", "").lower() in ("0", "false", "no"):
+            telegram["voice_enabled"] = False
 
         return config
 

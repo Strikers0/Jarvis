@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import io
-import wave
 from pathlib import Path
 from typing import Optional
 
-import av
 from rich.console import Console
 
 from core.config import ConfigManager
@@ -14,6 +11,7 @@ from core.conversation import MemoryAwareConversationManager
 from core.llm import LLMFactory, LLMMessage
 from core.memory import MemoryManager
 from core.personality import PersonalityManager
+from voice.audio import decode_audio_to_wav_bytes
 from voice.logger import VoiceLogger
 from voice.sarvam_stt import SarvamSTT
 from voice.sarvam_tts import SarvamTTS
@@ -97,29 +95,12 @@ class AudioFileProcessor:
         console.print(f"\n[cyan]Loading {path.name}...[/cyan]")
 
         try:
-            with av.open(str(path)) as container:
-                stream = container.streams.audio[0]
-                resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
-                frames = []
-                for frame in container.decode(audio=0):
-                    frame.pts = None
-                    resampled = resampler.resample(frame)
-                    for f in resampled:
-                        frames.append(f.to_ndarray().tobytes())
+            wav_bytes = decode_audio_to_wav_bytes(path)
         except Exception as e:
             console.print(f"[red]Failed to decode audio:[/red] {e}")
             return
 
-        audio_data = b"".join(frames)
-
         console.print("[cyan]Converting audio...[/cyan]")
-        wav_buffer = io.BytesIO()
-        with wave.open(wav_buffer, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(16000)
-            wf.writeframes(audio_data)
-        wav_bytes = wav_buffer.getvalue()
 
         console.print("[cyan]Running STT...[/cyan]")
         try:

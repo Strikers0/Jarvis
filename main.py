@@ -10,6 +10,11 @@ def main() -> None:
     from dotenv import load_dotenv
     load_dotenv()
 
+    if "--telegram" in sys.argv:
+        from core.services.telegram_runner import run_telegram
+        asyncio.run(run_telegram())
+        return
+
     if "--voice" in sys.argv:
         from cli.voice_live import voice_live
         asyncio.run(voice_live())

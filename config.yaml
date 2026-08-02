@@ -111,6 +111,16 @@ services:
     twilio_from_number: ""
   notes:
     db_path: notes.db
+  telegram:
+    # MTProto userbot (Telethon). Keys via env: TELEGRAM_API_ID, TELEGRAM_API_HASH,
+    # TELEGRAM_SESSION_NAME, TELEGRAM_ALLOWED_USERS, TELEGRAM_OWNER_CHAT_ID.
+    enabled: false
+    api_id: 0
+    api_hash: ""
+    session_name: jarvis_telegram
+    allowed_users: []
+    owner_chat_id: 0
+    voice_enabled: true
   external:
     # Optional keys via env: WEATHER_API_KEY, NEWS_API_KEY
     weather_api_key: ""

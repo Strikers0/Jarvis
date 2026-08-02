@@ -1,6 +1,6 @@
 # JARVIS - Intelligent Personal AI Assistant
 
-A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, desktop/browser automation via LLM function calling, and **communication & productivity services** (email, calendar, notes, calls, weather & news).
+A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, desktop/browser automation via LLM function calling, **communication & productivity services** (email, calendar, notes, calls, weather & news), and **Telegram messaging** (chat with JARVIS from Telegram as a userbot).
 
 ## Setup
 
@@ -126,6 +126,51 @@ You can also set `sarvam_voice` on a custom personality in a YAML file:
   Run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list device names and indices.
 - The speech/noise threshold auto-calibrates on every listen, so it adapts to your microphone and room noise.
 
+### Telegram Mode (Chat with JARVIS on Telegram)
+
+Chat with JARVIS from Telegram using an MTProto userbot (Telethon — not the Bot API).
+Each Telegram chat gets its own conversation session and memory.
+
+```powershell
+.\venv\Scripts\python.exe main.py --telegram
+```
+
+Requirements:
+- `TELEGRAM_ENABLED=true` and `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` set in `.env`
+  (get them at https://my.telegram.org). First run prompts for your phone number
+  and login code; the session is persisted locally.
+- `TELEGRAM_ALLOWED_USERS` — comma-separated Telegram user ids allowed to talk to
+  JARVIS (deny-by-default: unlisted users get "not authorized").
+- `TELEGRAM_OWNER_CHAT_ID` — chat used for proactive reminders.
+- Optional `SARVAM_API_KEY` enables voice-note replies (STT in / TTS out).
+
+What works:
+- Plain text chat with full tool use (confirmations happen inline in the chat).
+- **Saved Messages console**: message yourself in Telegram's "Saved Messages"
+  to issue commands; JARVIS reads them and replies back in the same chat.
+  Outgoing messages you send from any device are treated as commands; JARVIS's
+  own replies are ignored to avoid echo loops.
+- Slash commands: `/help`, `/personality`, `/voice`, `/services`, `/notes`,
+  `/todos`, `/remind`, `/model`, `/memory`, `/clear`.
+- Voice notes: decoded to 16 kHz WAV → Sarvam STT → chat → Sarvam TTS (personality
+  voice) → voice-note reply.
+- Proactive reminders pushed to the owner chat.
+
+#### Telegram Security Model
+
+- **Deny-by-default**: only users listed in `TELEGRAM_ALLOWED_USERS` can talk to
+  JARVIS. Everyone else is **silently ignored** (no reply at all, so strangers
+  aren't bothered and JARVIS stays hidden).
+- **Inline confirmations**: write/send/delete operations prompt "Allow this action?
+  Reply yes or no." in the chat before executing. Reads (weather, notes, news,
+  history) run automatically. Confirmations time out after 120s if unanswered.
+- **Per-chat isolation**: each Telegram chat has its own conversation session and
+  memory scope (`user_id`), so different users never see each other's context.
+
+Telegram is implemented as **just another messaging service** behind the
+platform-neutral `MessagingService` interface, so future platforms (WhatsApp,
+Discord, Slack, Signal, SMS) plug in with the same contract.
+
 ### In-Chat Commands
 
 | Command | Description |
@@ -189,6 +234,12 @@ Supported environment variables:
 - `SARVAM_API_KEY`
 - `LLM_PROVIDER`, `LLM_MODEL`
 - `ACTIVE_PERSONALITY`
+- `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_IMAP_HOST`, `EMAIL_SMTP_HOST`, `EMAIL_FROM`
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`
+- `WEATHER_API_KEY`, `NEWS_API_KEY`
+- `TELEGRAM_ENABLED`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_NAME`,
+  `TELEGRAM_ALLOWED_USERS`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_VOICE_ENABLED`
 
 ### Production Recommendation: Windows Credential Manager
 For production use, store API keys in the **Windows Credential Manager** or a system keyring instead of a `.env` file. Use Python's `keyring` library to retrieve them at runtime.
@@ -342,6 +393,7 @@ JARVIS can send/read email, manage calendar events and reminders, take notes and
 | **Notes & To-Do** (`create_note`, `list_notes`, `search_notes`, `delete_note`, `create_todo`, `list_todos`, `mark_todo`, `delete_todo`) | Local SQLite (`notes.db`) |
 | **External APIs** (`get_weather`, `get_news`, `get_stock`, `get_crypto`, `get_wikipedia`) | Weather via OpenWeatherMap or wttr.in fallback (no key needed); news via NewsAPI or Google News RSS fallback; stocks via Yahoo Finance; crypto via CoinGecko; Wikipedia summaries |
 | **Phone calls** (`make_call`, `save_contact`, `list_contacts`, `call_logs`) | Twilio VoIP when configured (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `provider: twilio`); local contacts + call log otherwise |
+| **Telegram** (`send_message`, `send_file`, `send_voice`) | MTProto userbot via Telethon. Launch with `python main.py --telegram`. Requires `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_ALLOWED_USERS` (deny-by-default allow-list) |
 
 ### Example Queries
 
@@ -357,7 +409,7 @@ JARVIS can send/read email, manage calendar events and reminders, take notes and
 
 ### Service Health
 
-Use `/services` in the CLI to see which services are configured and reachable. Unconfigured services (e.g. email without keys) return an error status but never crash the assistant.
+Use `/services` in the CLI to see which services are configured and reachable. Unconfigured services (e.g. email without keys) return an error status but never crash the assistant. The `/services` command also works from Telegram (`/services` in a chat).
 
 ---
 
@@ -381,6 +433,7 @@ jarvis/
 │   ├── llm.py         # LLM abstraction (OpenRouter, OpenAI, Gemini)
 │   ├── conversation.py# Conversation history + memory-aware manager
 │   ├── personality.py # Personality system
+│   ├── session.py     # JarvisSession — shared runtime (LLM + conv + tools + services)
 │   ├── memory/        # Long-term & vector memory
 │   ├── tools/         # Tool calling framework
 │   │   ├── base.py    # Tool ABC, ToolRegistry, ToolDispatcher, PermissionManager
@@ -391,6 +444,15 @@ jarvis/
 │   │   └── win.py     # PowerShell desktop helpers (keys, mouse, clipboard)
 │   ├── services/      # Phase 4: communication & productivity
 │   │   ├── base.py    # Service ABC + service_tool() tool factory
+│   │   ├── messaging.py    # MessagingService ABC + platform-neutral models
+│   │   ├── telegram.py     # TelegramService (lifecycle, sends, allow-list)
+│   │   ├── telegram_client.py  # Telethon singleton (only Telethon-touching file)
+│   │   ├── telegram_events.py   # Inbound event handler + slash commands
+│   │   ├── telegram_models.py   # TelegramRecipient / TelegramInboundMessage
+│   │   ├── telegram_voice.py    # Voice-note STT → chat → TTS processor
+│   │   ├── telegram_confirmation.py # Inline yes/no confirmations for tools
+│   │   ├── telegram_reminders.py    # Background due-reminder poller
+│   │   ├── telegram_runner.py       # run_telegram() wiring (main.py --telegram)
 │   │   ├── notes.py   # Notes & to-dos (SQLite)
 │   │   ├── email.py   # IMAP/SMTP send & read
 │   │   ├── calendar.py# Events, reminders, Google Calendar OAuth2
@@ -404,6 +466,7 @@ jarvis/
 │   ├── sarvam_stt.py  # Sarvam STT API wrapper
 │   ├── sarvam_tts.py  # Sarvam TTS API wrapper
 │   ├── pipeline.py    # STT → LLM → TTS pipeline
+│   ├── audio.py       # Decode any audio → 16kHz mono WAV (PyAV)
 │   ├── microphone.py  # Mic auto-detection + callback recorder + VAD
 │   ├── player.py      # Non-blocking WAV playback
 │   ├── controller.py  # VoiceController (live listen → STT → LLM → TTS loop)
@@ -435,3 +498,7 @@ jarvis/
 | Voice mode never hears me / threshold too high | Speak closer to the mic, or in a quiet room; the threshold auto-calibrates each listen |
 | No audio plays back | Check speakers/volume; response is saved to `runtime/response.wav` |
 | Personality not found | Names are case-insensitive; use `/personality` to list |
+| `--telegram`: "Telegram service is not enabled" | Set `services.telegram.enabled=true` in `config.yaml` or `TELEGRAM_ENABLED=true` in `.env` |
+| `--telegram`: "Telethon is not installed" | Install it: `pip install telethon` |
+| Telegram messages get no reply | Only users in `TELEGRAM_ALLOWED_USERS` get a reply; others are silently ignored. Add your user id (comma-separated) to allow more people |
+| Telegram voice notes reply "not supported" | Set `SARVAM_API_KEY` in `.env` to enable STT/TTS |
