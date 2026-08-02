@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-
 Gender = Literal["male", "female"]
 
 
@@ -23,6 +22,7 @@ class Personality:
     system_prompt: str
     traits: PersonalityTraits = field(default_factory=PersonalityTraits)
     voice_id: str = ""
+    sarvam_voice: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> Personality:
@@ -40,6 +40,7 @@ class Personality:
             system_prompt=data["system_prompt"],
             traits=traits,
             voice_id=data.get("voice_id", ""),
+            sarvam_voice=data.get("sarvam_voice", ""),
         )
 
     def to_dict(self) -> dict:
@@ -55,4 +56,5 @@ class Personality:
                 "formality": self.traits.formality,
             },
             "voice_id": self.voice_id,
+            "sarvam_voice": self.sarvam_voice,
         }

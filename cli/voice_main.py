@@ -59,7 +59,7 @@ class AudioFileProcessor:
             api_key=api_key,
             model=sarvam_cfg.tts_model,
             language_code=sarvam_cfg.tts_language_code,
-            voice=sarvam_cfg.tts_speaker,
+            voice=self.personality_manager.get_sarvam_voice(),
             speed=sarvam_cfg.tts_pace,
         )
 
@@ -129,7 +129,7 @@ class AudioFileProcessor:
             console.print(f"[red]STT failed:[/red] {e}")
             return
         self.logger.stt_response(transcript)
-        console.print(f"\n[bold green]Transcript:[/bold green]")
+        console.print("\n[bold green]Transcript:[/bold green]")
         console.print(f'  "{transcript}"\n')
 
         if not transcript.strip():

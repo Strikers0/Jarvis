@@ -44,6 +44,7 @@ def print_welcome() -> None:
     welcome = Panel(
         "[bold cyan]JARVIS[/bold cyan] is ready. Type your message or use commands:\n\n"
         "  [bold]/personality[/bold] <name>  - Switch personality\n"
+        "  [bold]/voice[/bold] [name]        - Choose a TTS voice for a personality\n"
         "  [bold]/history[/bold]              - Show conversation history\n"
         "  [bold]/clear[/bold]                - Clear current conversation\n"
         "  [bold]/sessions[/bold]             - List all sessions\n"
@@ -213,6 +214,9 @@ class JARVISCLI:
         elif cmd == "/personality":
             await self._switch_personality(arg)
 
+        elif cmd == "/voice":
+            self._choose_voice(arg)
+
         elif cmd == "/history":
             self._show_history()
 
@@ -303,6 +307,67 @@ class JARVISCLI:
             print_header(personality.name.replace("_", " ").title(), self.config.llm.model)
         else:
             console.print("[dim]Personality not changed.[/dim]")
+
+    def _choose_voice(self, name: str) -> None:
+        if not name:
+            personality = self.personality_manager.get_active()
+            if personality is None:
+                console.print("[red]No active personality.[/red]")
+                return
+        else:
+            personality = self.personality_manager.get(name)
+            if personality is None:
+                console.print(f"[red]Personality '{name}' not found.[/red]")
+                console.print("Type [bold]/personality[/bold] to see all available personalities.")
+                return
+
+        from voice.sarvam_voices import voices_for_gender
+
+        voices = voices_for_gender(personality.gender)
+        current = self.personality_manager.get_sarvam_voice(personality.name)
+
+        console.print(Panel(
+            f"[bold]{personality.name.capitalize()}[/bold] ([dim]{personality.gender}[/dim])\n"
+            f"Current voice: [cyan]{current}[/cyan]",
+            title="Choose TTS Voice",
+            border_style="cyan",
+        ))
+
+        for i, voice in enumerate(voices, start=1):
+            marker = "  > " if voice == current else "    "
+            console.print(f"{marker}[bold]{i:2}[/bold]. {voice}")
+
+        choice = Prompt.ask(
+            "Select a voice (number, or Enter to keep current)",
+            default="",
+        ).strip()
+        if not choice:
+            console.print("[dim]Voice not changed.[/dim]")
+            return
+
+        try:
+            index = int(choice)
+            if 1 <= index <= len(voices):
+                selected = voices[index - 1]
+            else:
+                console.print("[red]Invalid number.[/red]")
+                return
+        except ValueError:
+            selected = choice.lower()
+
+        if selected not in voices:
+            console.print(
+                f"[red]'{selected}' is not available for {personality.gender} personalities.[/red]"
+            )
+            return
+
+        if self.personality_manager.set_sarvam_voice(personality.name, selected):
+            console.print(
+                f"[green]Voice set:[/green] {personality.name} -> [cyan]{selected}[/cyan]"
+            )
+            console.print("[dim]Use live voice mode (python -m cli.voice_live) to hear it.[/dim]")
+        else:
+            console.print(f"[red]Could not set voice '{selected}'.[/red]")
 
     def _show_history(self) -> None:
         messages = self.conversation.get_history()

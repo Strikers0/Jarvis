@@ -19,11 +19,11 @@ gemini:
 sarvam:
   # API key: use SARVAM_API_KEY env var only — never hardcode here
   stt_model: "saaras:v3"                 # STT model: sarvam-1
-  tts_model: "bulbul:v3"                 # TTS model: sarvam-1
+  tts_model: "bulbul:v3"                 # TTS model: bulbul:v3 (or bulbul:v2)
   stt_language_code: "hi-IN"          # language code for STT (Hinglish/Hindi input)
   stt_with_translation: true          # transcribe Hinglish audio, output English text
   tts_language_code: "hi-IN"          # language code for TTS
-  tts_speaker: priya                # TTS speaker voice
+  tts_speaker: ishita                 # fallback TTS speaker (personality voices override this)
   tts_pitch: 0.0
   tts_pace: 1.0
   tts_loudness: 1.0

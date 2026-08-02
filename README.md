@@ -81,6 +81,27 @@ Voice mode active. Speak... (Ctrl+C to stop)
 Listening...
 ```
 
+#### Choosing a Voice for Each Personality
+
+Each personality has its own TTS voice from the [Sarvam AI Bulbul v3 voice catalog](https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/voices) (35+ voices). Male personalities default to male voices (e.g. `shubh`, `aditya`) and female personalities to female voices (e.g. `ishita`, `neha`).
+
+Pick a voice interactively from the text CLI:
+
+```
+/voice jarvis        # choose a voice for the jarvis personality
+/voice               # choose a voice for the active personality
+```
+
+You'll be shown a numbered list of voices matching the personality's gender. Enter a number (or a voice name) to select it, or press Enter to keep the current one. The choice is saved to `runtime/personality_voices.json` (gitignored) and used the next time you run live voice mode or audio file mode.
+
+You can also set `sarvam_voice` on a custom personality in a YAML file:
+```yaml
+- name: my_friend
+  gender: female
+  system_prompt: "..."
+  sarvam_voice: priya
+```
+
 **How it works:**
 
 1. JARVIS listens continuously. Speak, then pause for ~1 second — it stops recording on silence.

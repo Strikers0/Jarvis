@@ -81,7 +81,7 @@ def build_system_prompt_builder(config, conversation, personality_manager):
     return builder
 
 
-def build_sarvam(config) -> tuple[SarvamSTT, SarvamTTS]:
+def build_sarvam(config, personality_manager) -> tuple[SarvamSTT, SarvamTTS]:
     sarvam_cfg = config.sarvam
     api_key = sarvam_cfg.api_key or os.getenv("SARVAM_API_KEY", "")
     if not api_key:
@@ -96,7 +96,7 @@ def build_sarvam(config) -> tuple[SarvamSTT, SarvamTTS]:
         api_key=api_key,
         model=sarvam_cfg.tts_model,
         language_code=sarvam_cfg.tts_language_code,
-        voice=sarvam_cfg.tts_speaker,
+        voice=personality_manager.get_sarvam_voice(),
         speed=sarvam_cfg.tts_pace,
     )
     return stt, tts
@@ -128,7 +128,7 @@ async def voice_live(config_path: str | Path | None = None) -> None:
     if config.tool.enabled:
         dispatcher = build_tool_dispatcher(config, conversation, memory_manager, personality_manager)
         system_prompt_builder = build_system_prompt_builder(config, conversation, personality_manager)
-    stt, tts = build_sarvam(config)
+    stt, tts = build_sarvam(config, personality_manager)
 
     mic_device = resolve_mic()
     if mic_device is None:

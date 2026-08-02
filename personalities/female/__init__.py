@@ -18,6 +18,7 @@ PROFESSIONAL_ASSISTANT = Personality(
         formality="formal",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="ishita",
 )
 
 CARING_FRIEND = Personality(
@@ -37,6 +38,7 @@ CARING_FRIEND = Personality(
         formality="casual",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="neha",
 )
 
 TUTOR = Personality(
@@ -57,6 +59,7 @@ TUTOR = Personality(
         formality="neutral",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="shreya",
 )
 
 MOTIVATOR_FEMALE = Personality(
@@ -76,6 +79,7 @@ MOTIVATOR_FEMALE = Personality(
         formality="casual",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="simran",
 )
 
 CHEERFUL_COMPANION = Personality(
@@ -147,6 +151,7 @@ KAAYA = Personality(
         formality="very casual",
     ),
     voice_id="en_US-amy-low",
+    sarvam_voice="priya",
 )
 
 FEMALE_PERSONALITIES: dict[str, Personality] = {
