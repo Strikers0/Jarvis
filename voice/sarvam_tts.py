@@ -33,11 +33,13 @@ class SarvamTTS:
             self._client = httpx.AsyncClient(timeout=120)
         return self._client
 
-    async def synthesize(self, text: str, output_path: str | Path = "runtime/response.wav") -> Path:
+    async def synthesize(
+        self, text: str, output_path: str | Path = "runtime/response.wav", voice: str = ""
+    ) -> Path:
         payload = {
             "inputs": [text],
             "target_language_code": self.language_code,
-            "speaker": self.voice,
+            "speaker": voice or self.voice,
             "pace": self.speed,
             "model": self.model,
         }

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -53,6 +52,12 @@ class VoiceController:
             return self.system_prompt_builder()
         p = self.personality_manager.get_active()
         return p.system_prompt if p else "You are JARVIS, a helpful AI assistant."
+
+    def _active_voice(self) -> str:
+        p = self.personality_manager.get_active()
+        if p is None:
+            return "shubh"
+        return self.personality_manager.get_sarvam_voice(p.name)
 
     async def run(self) -> None:
         self._running = True
@@ -123,7 +128,9 @@ class VoiceController:
         console.print("[cyan]Speaking...[/cyan]")
         self.logger.tts_synthesizing()
         try:
-            out = await self.tts.synthesize(reply, output_path=self.response_path)
+            out = await self.tts.synthesize(
+                reply, output_path=self.response_path, voice=self._active_voice()
+            )
             self.logger.tts_response(str(out))
             player.play_wav_start(out, mic_device=self.mic_device)
             while player.is_playing():
