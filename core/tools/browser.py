@@ -377,17 +377,6 @@ class OpenURLTool(Tool):
     async def execute(self, url: str, new_tab: bool = True) -> ToolResult:
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
-        pw = await PlaywrightManager.get_instance()
-        if pw.available:
-            page = await pw.new_page()
-            try:
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                title = await page.title()
-                return ToolResult(success=True, output=f"Opened {url} - Page title: {title}")
-            except Exception as e:
-                logger.warning("Playwright open_url failed: %s", e)
-            finally:
-                await page.close()
         try:
             await _open_in_browser(url)
             return ToolResult(success=True, output=f"Opened {url} in your default browser.")

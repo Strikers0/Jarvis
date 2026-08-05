@@ -73,7 +73,7 @@ class AgentGraph:
         user_input: str,
         system_prompt: str,
         tools: list[dict],
-        max_iterations: int = 5,
+        max_iterations: int = 8,
     ) -> AgentState:
         state = AgentState(
             messages=[
@@ -83,28 +83,34 @@ class AgentGraph:
             context={"tools": tools, "iteration": 0},
         )
 
+        node_name = "analyze_intent"
         for iteration in range(max_iterations):
             state.context["iteration"] = iteration
-            node_name = state.current_node
 
             if node_name == "synthesize_response":
-                state = await self._nodes[node_name](state)
+                state = await self._synthesize_response(state)
                 break
 
-            state = await self._nodes[node_name](state)
+            if node_name == "execute_tools":
+                result = await ToolExecutionNode(self.dispatcher)(state)
+                if result.error:
+                    state = result
+                    logger.error("Agent error at node %s: %s", node_name, result.error)
+                    break
+                state = result
+                # After tools run, go back to the LLM so it can chain the next
+                # action (e.g. open opera -> search) until it stops requesting tools.
+                node_name = "analyze_intent"
+                continue
 
+            # analyze_intent
+            state = await self._analyze_intent(state)
             if state.error:
                 logger.error("Agent error at node %s: %s", node_name, state.error)
                 break
 
-            next_nodes = self._edges.get(node_name, [])
-            if node_name == "select_tools":
-                has_tool_calls = any(
-                    msg.get("tool_calls") for msg in state.messages
-                )
-                state.current_node = "execute_tools" if has_tool_calls else "synthesize_response"
-            elif next_nodes:
-                state.current_node = next_nodes[0]
+            last = state.messages[-1] if state.messages else {}
+            node_name = "execute_tools" if last.get("tool_calls") else "synthesize_response"
 
         state.done = True
         return state

@@ -17,6 +17,7 @@ from core.tools import (
     PermissionManager,
     SystemToolSet,
     ToolDispatcher,
+    PersonalityToolSet,
     ToolRegistry,
 )
 
@@ -101,6 +102,7 @@ class JarvisSession:
             BrowserAutomationToolSet(),
             MediaToolSet(),
             SystemToolSet(),
+            PersonalityToolSet(self.personality_manager),
         ):
             self.tool_registry.register_set(ts)
 
@@ -149,11 +151,14 @@ class JarvisSession:
         if self.config.tool.enabled:
             base += (
                 "\n\nYou have access to tools that can perform actions on the user's system "
-                "(close apps, search files, execute commands, etc.). "
-                "Use tools ONLY when the user explicitly asks you to perform an action. "
-                "For general conversation, questions, or after successfully completing a task, "
-                "respond naturally without calling any tools. "
-                "Never call additional tools after a task is complete."
+                "(close apps, search files, execute commands, switch personality, etc.). "
+                "Decide whether the user is REQUESTING A TASK or just HAVING A CONVERSATION:\n"
+                "- If the user explicitly asks you to do something (send/delete a message, open/close "
+                "an app, search, block/clear, switch personality, etc.), treat it as a TASK and call "
+                "the matching tool immediately. Do NOT ask for clarification, ids, or confirm first.\n"
+                "- If the user is only chatting or asking a question, just respond normally WITHOUT "
+                "calling any tools.\n"
+                "Never call additional tools after a task is already complete."
             )
         return self.conversation.build_system_prompt_with_memory(base, user_id=user_id)
 

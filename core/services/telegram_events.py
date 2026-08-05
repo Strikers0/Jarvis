@@ -80,14 +80,21 @@ class TelegramEventHandler:
     async def _handle_chat(self, message: TelegramInboundMessage) -> None:
         dispatcher = self.session.tool_dispatcher
         previous = dispatcher.async_confirm_callback if dispatcher else None
-        if dispatcher and self.confirmation_manager is not None:
-            dispatcher.async_confirm_callback = self._make_confirm_callback(message)
+        # Text = full control: proceed without asking (user granted this).
+        if dispatcher:
+            dispatcher.async_confirm_callback = self._make_auto_confirm_callback()
         try:
             reply = await self.session.chat(message.text, user_id=message.sender_id)
         finally:
             if dispatcher:
                 dispatcher.async_confirm_callback = previous
         await self.service.send_message(message.recipient_id, reply)
+
+    def _make_auto_confirm_callback(self):
+        async def _confirm(tool_name: str, args: dict) -> bool:
+            return True
+
+        return _confirm
 
     def _make_confirm_callback(self, message: TelegramInboundMessage):
         async def _confirm(tool_name: str, args: dict) -> bool:
@@ -105,9 +112,18 @@ class TelegramEventHandler:
             )
             return
         try:
-            reply, voice_path = await self.voice_processor.process_event(
-                message.raw, user_id=message.sender_id
-            )
+            dispatcher = self.session.tool_dispatcher
+            previous = dispatcher.async_confirm_callback if dispatcher else None
+            # Voice = ask for confirmation before destructive actions.
+            if dispatcher and self.confirmation_manager is not None:
+                dispatcher.async_confirm_callback = self._make_confirm_callback(message)
+            try:
+                reply, voice_path = await self.voice_processor.process_event(
+                    message.raw, user_id=message.sender_id
+                )
+            finally:
+                if dispatcher:
+                    dispatcher.async_confirm_callback = previous
         except Exception as e:
             logger.exception("Telegram voice processing error")
             await self.service.send_message(
@@ -149,6 +165,8 @@ class TelegramEventHandler:
             "/model": self._cmd_model,
             "/memory": self._cmd_memory,
             "/clear": self._cmd_clear,
+            "/permit": self._cmd_permit,
+            "/permtools": self._cmd_permit_tools,
         }
 
     async def _cmd_help(self, message: TelegramInboundMessage, arg: str) -> str:
@@ -163,7 +181,9 @@ class TelegramEventHandler:
             "/remind - list reminders\n"
             "/model - current LLM model\n"
             "/memory - stored memories\n"
-            "/clear - clear this conversation\n\n"
+            "/clear - clear this conversation\n"
+            "/permit <tool> <auto|confirm|deny> - change a tool's permission\n"
+            "/permtools - list all tools and their permission levels\n\n"
             "Anything else: just talk to me."
         )
 
@@ -235,6 +255,49 @@ class TelegramEventHandler:
             self.session.conversation.clear_history()
             return "Conversation cleared."
         return "No conversation to clear."
+
+    def _command_map(self) -> dict[str, Any]:
+        return {
+            "/help": self._cmd_help,
+            "/start": self._cmd_help,
+            "/personality": self._cmd_personality,
+            "/voice": self._cmd_voice,
+            "/services": self._cmd_services,
+            "/notes": self._cmd_notes,
+            "/todos": self._cmd_todos,
+            "/remind": self._cmd_remind,
+            "/model": self._cmd_model,
+            "/memory": self._cmd_memory,
+            "/clear": self._cmd_clear,
+            "/permit": self._cmd_permit,
+            "/permtools": self._cmd_permit_tools,
+        }
+
+    async def _cmd_permit_tools(self, message: TelegramInboundMessage, arg: str) -> str:
+        pm = self.session.permission_manager
+        registry = self.session.tool_registry
+        lines = []
+        for tool in sorted(registry.list_tools(), key=lambda t: t.name):
+            level = pm.get_permission_level(tool.name, tool.permission_level)
+            lines.append(f"• {tool.name}: {level}")
+        return "Tool permissions:\n" + "\n".join(lines) if lines else "No tools."
+
+    async def _cmd_permit(self, message: TelegramInboundMessage, arg: str) -> str:
+        parts = arg.strip().split()
+        if not parts:
+            return await self._cmd_permit_tools(message, "")
+        if len(parts) != 2:
+            return "Usage: /permit <tool> <auto|confirm|deny>\nTip: /permtools to see tool names."
+        tool_name, level = parts[0], parts[1].lower()
+        if level not in ("auto", "confirm", "deny"):
+            return "Level must be one of: auto, confirm, deny."
+        registry = self.session.tool_registry
+        tool = registry.get(tool_name)
+        if tool is None:
+            return f"Unknown tool '{tool_name}'. Use /permtools to list tool names."
+        pm = self.session.permission_manager
+        pm.set_permission_level(tool_name, level)
+        return f"Set '{tool_name}' permission to {level}."
 
     def _service(self, name: str):
         return self.session.service_manager.get(name) if self.session.service_manager else None

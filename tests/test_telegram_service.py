@@ -46,6 +46,61 @@ async def test_health_check_not_configured():
     assert report["ok"] is False
 
 
+def test_telegram_tools_registered():
+    svc = TelegramService(api_id=1, api_hash="h")
+    tools = svc.get_tools()
+    names = {t.name for t in tools}
+    assert {
+        "telegram_send_message",
+        "telegram_delete_messages",
+        "telegram_delete_recent",
+        "telegram_list_chats",
+        "telegram_read_chat",
+        "telegram_block",
+        "telegram_unblock",
+        "telegram_clear_chat",
+    } <= names
+    for tool in tools:
+        assert tool.category == "telegram"
+
+
+@pytest.mark.asyncio
+async def test_new_telegram_tools_fail_when_not_started():
+    svc = TelegramService(api_id=1, api_hash="h")
+    assert await svc.send_message_to("123", "hi") is False
+    assert await svc.delete_messages("123", [1, 2]) is False
+    assert await svc.delete_recent_own("123", 5) is False
+    assert await svc.delete_messages("123", []) is False
+    assert await svc.delete_recent_own("123", 0) is False
+    assert await svc.block_user("123") is False
+    assert await svc.unblock_user("123") is False
+    assert await svc.clear_chat_history("123") is False
+    assert await svc.list_chats() == "Telegram is not connected."
+    assert await svc.read_chat("123") == "Telegram is not connected."
+
+
+@pytest.mark.asyncio
+async def test_permission_levels_per_tool():
+    svc = TelegramService(api_id=1, api_hash="h")
+    by_name = {t.name: t for t in svc.get_tools()}
+    # Full-control tools run without confirmation; destructive ones confirm via callback.
+    assert by_name["telegram_send_message"].permission_level == "auto"
+    assert by_name["telegram_list_chats"].permission_level == "auto"
+    assert by_name["telegram_read_chat"].permission_level == "auto"
+    assert by_name["telegram_delete_messages"].permission_level == "confirm"
+    assert by_name["telegram_block"].permission_level == "confirm"
+    assert by_name["telegram_clear_chat"].permission_level == "confirm"
+
+
+@pytest.mark.asyncio
+async def test_resolve_target():
+    svc = TelegramService(api_id=1, api_hash="h")
+    assert await svc._resolve_target("123") == 123
+    assert await svc._resolve_target("0001") == 1
+    assert await svc._resolve_target("@username") == "@username"
+    assert await svc._resolve_target("First Name") == "First Name"
+
+
 def _fake_event(text: str = "", voice: bool = False, out: bool = False):
     message = type("Msg", (), {})()
     message.text = text
