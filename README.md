@@ -1,3 +1,4 @@
+<img width="160" height="120" alt="1785344157634" src="https://github.com/user-attachments/assets/cbadd858-184a-4798-a27c-d1f1ea8dec0e" />
 # JARVIS - Intelligent Personal AI Assistant
 
 A terminal-based AI assistant with personality switching, conversation memory, **live voice conversations**, audio file processing via Sarvam API, desktop/browser automation via LLM function calling, **communication & productivity services** (email, calendar, notes, calls, weather & news), and **Telegram messaging** (chat with JARVIS from Telegram as a userbot).
